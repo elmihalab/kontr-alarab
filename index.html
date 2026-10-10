@@ -270,6 +270,7 @@ table.sb tr.me td{background:rgba(185,167,121,.12)}
     <div class="row"><span class="lbl">دولتك</span></div>
     <div class="chips" id="countryChips"></div>
     <div class="row"><button class="go" id="bOffline" type="button">🤖 العب مع روبوتات</button><button class="go pol" id="bOnline" type="button">🌐 أونلاين مع رفقاتي</button></div>
+    <div class="note" style="opacity:.5">الإصدار 1.5 · أونلاين عبر الإنترنت 🌍</div>
     <div class="row" id="installRow" hidden><button class="go alt" id="bInstall" type="button">📥 نزّل اللعبة كتطبيق على جهازك</button></div>
     <div class="note">الكمبيوتر: <b>WASD</b> مشي · <b>Shift</b> ركض · <b>C</b> جلوس · <b>Space</b> قفز · الفأرة تصويب · <b>R</b> تلقيم · <b>1/2</b> سلاح · <b>G</b> قنبلة متفجرة · <b>F</b> قنبلة عمى · <b>V</b> قنبلة دخان · <b>3</b> سكين · <b>E</b> زرع/فك القنبلة · <b>B</b> متجر · <b>Enter</b> شات · كبسة يمين: تصويب/منظار · <b>Tab</b> النتائج</div>
   </div>
@@ -1524,43 +1525,64 @@ function hostCheckWin(){
   else if(M.type==='ctf'){ if(M.score[0]>=M.ct||M.score[1]>=M.ct||M.t<=0){ M.phase='over'; showEnd(); } }
   else if(M.type==='dom'){ if(OBJ.domHold>=DOM_HOLD || M.t<=0){ M.phase='over'; showEnd(); } }
 }
-/* =================== INTERNET ROOMS (MQTT relay) — works from the downloaded file / app, no link needed =================== */
-const MQTT_BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081/mqtt'];
+/* =================== INTERNET ROOMS (MQTT relay over several public brokers) ===================
+   Host (room creator) connects to every broker and listens on all of them; it bridges players who landed on different brokers.
+   Joiners try every broker, keep the first one where the host answers, and drop the rest. Ports 443 first: least likely to be blocked. */
+const MQTT_BROKERS = [
+  {url:'wss://mqtt.eclipseprojects.io:443/mqtt'},
+  {url:'wss://public.cloud.shiftr.io:443', username:'public', password:'public'},
+  {url:'wss://broker.emqx.io:8084/mqtt'},
+  {url:'wss://broker.hivemq.com:8884/mqtt'},
+  {url:'wss://test.mosquitto.org:8081/mqtt'}
+];
 const PEER_API = (typeof window!=='undefined' && window.mqtt) ? {
   isPeer:true,
   join(name, create){
-    const urls = (window.__mqttBrokers || MQTT_BROKERS);
-    const base = 'kontrarab/v2/' + String(name).replace(/[^a-zA-Z0-9]/g,'') + '/';
+    const list = (window.__mqttBrokers || MQTT_BROKERS).map(b=>typeof b==='string'?{url:b}:b);
+    const base = 'kontrarab/v3/' + String(name).replace(/[^a-zA-Z0-9]/g,'') + '/';
     const myId = 'p' + Math.random().toString(36).slice(2,10);
     return new Promise((resolve,reject)=>{
-      let done=false, closed=false, seq=0, lastOut=0, pending=null, sendT=null, anyUp=0, lastUp=Date.now();
+      let done=false, closed=false, seq=0, lastOut=0, lastAll=0, sendT=null, lastUp=Date.now(), chosen=-1;
       const me = { peer:myId, sameTab:true, isMe:true, presence:{} };
       const others = new Map(); let snap=[me];
+      const seenOn = new Map(); // host: peerId -> Map(brokerIdx -> time)
       const rebuild=()=>{ snap=[me, ...others.values()]; };
-      const clients = urls.map(u=>{ let c=null; try{ c = mqtt.connect(u, { clientId:'ka_'+myId+'_'+Math.random().toString(36).slice(2,6), keepalive:20, reconnectPeriod:2500, connectTimeout:9000, clean:true }); }catch(e){ return null; }
-        c.on('connect', ()=>{ anyUp++; lastUp=Date.now(); c.subscribe(base+'+', {qos:0}); if(!done && create){ done=true; resolve(room); } flush(true); });
-        c.on('close', ()=>{ });
+      const dec = new TextDecoder();
+      const clients = list.map((b,i)=>{ let c=null; try{ c = mqtt.connect(b.url, { clientId:'ka_'+myId+'_'+i, username:b.username, password:b.password, keepalive:20, reconnectPeriod:3000, connectTimeout:10000, clean:true }); }catch(e){ return null; }
+        c._i=i;
+        c.on('connect', ()=>{ lastUp=Date.now(); c.subscribe(base+'+', {qos:0}); if(create){ if(!done){ done=true; resolve(room); } flush(true); } });
         c.on('error', ()=>{});
-        c.on('message', (topic, buf)=>{ const id=topic.slice(base.length); if(id===myId) return; let m; try{ m=JSON.parse(new TextDecoder().decode(buf)); }catch(e){ return; }
-          if(!m || typeof m!=='object') return; if(m.bye){ others.delete(id); rebuild(); return; }
-          const o=others.get(id); if(o && m.s<=o.s) { o.seen=Date.now(); return; }
-          if(m.p && typeof m.p==='object'){ others.set(id,{peer:id, sameTab:false, isMe:false, presence:m.p, s:m.s, seen:Date.now()}); rebuild();
-            if(!done && !create && m.p.n){ done=true; resolve(room); } } });
+        c.on('message', (topic, buf)=>{ if(closed) return; const id=topic.slice(base.length); if(id===myId) return; const raw=dec.decode(buf); let m; try{ m=JSON.parse(raw); }catch(e){ return; }
+          if(!m || typeof m!=='object') return;
+          if(create){ if(m.b) return; // our own bridged copy
+            let so=seenOn.get(id); if(!so){ so=new Map(); seenOn.set(id,so); } so.set(i,Date.now());
+            bridge(id, i, m); }
+          else { if(chosen<0){ if(!m.h) return; chosen=i; lastUp=Date.now(); setTimeout(()=>{ for(const o of clients) if(o!==c) try{ o.end(true); }catch(e){} }, 1500); if(!done){ done=true; resolve(room); } flush(true); }
+            else if(i!==chosen) return; }
+          if(m.bye){ others.delete(id); rebuild(); return; }
+          const o=others.get(id); if(o && m.s<=o.s){ o.seen=Date.now(); return; }
+          if(m.p && typeof m.p==='object'){ others.set(id,{peer:id, sameTab:false, isMe:false, presence:m.p, s:m.s, seen:Date.now()}); rebuild(); } });
         return c; }).filter(Boolean);
-      const connectedCount = ()=>clients.filter(c=>c.connected).length;
+      const live = c => c && c.connected;
+      // brokers where some player (other than `except`) was heard in the last 8 s
+      function activeBrokers(except){ const now=Date.now(), set=new Set(); for(const [id,so] of seenOn){ if(id===except) continue; for(const [bi,t] of so) if(now-t<8000) set.add(bi); } return set; }
+      function bridge(id, from, m){ const act=activeBrokers(id); act.delete(from); if(!act.size) return; const so=seenOn.get(id); const msg=JSON.stringify({...m, b:1});
+        for(const bi of act){ if(so && so.has(bi) && Date.now()-so.get(bi)<8000) continue; const c=clients.find(x=>x._i===bi); if(live(c)) try{ c.publish(base+id, msg, {qos:0}); }catch(e){} } }
       function flush(force){ if(closed) return; const now=Date.now(); if(!force && now-lastOut<95){ if(!sendT) sendT=setTimeout(()=>{ sendT=null; flush(true); }, 95-(now-lastOut)); return; }
-        lastOut=now; const msg=JSON.stringify({p:me.presence, s:++seq}); for(const c of clients) if(c.connected) try{ c.publish(base+myId, msg, {qos:0}); }catch(e){} }
+        lastOut=now; const msg=JSON.stringify({p:me.presence, s:++seq, h:create?1:0});
+        if(create){ const all = now-lastAll>1000; if(all) lastAll=now; const act=activeBrokers(null); for(const c of clients) if(live(c) && (all || act.has(c._i))) try{ c.publish(base+myId, msg, {qos:0}); }catch(e){} }
+        else { for(const c of clients) if(live(c) && (chosen<0 || c._i===chosen)) try{ c.publish(base+myId, msg, {qos:0}); }catch(e){} } }
       const room = {
-        name, isHub:false,
+        name, isHub:!!create,
         presence(patch){ const p={...me.presence}; for(const k in patch){ if(patch[k]===null) delete p[k]; else p[k]=patch[k]; } me.presence=p; rebuild(); flush(false); return Promise.resolve(); },
         peers(){ return snap; },
-        connected(){ if(closed) return false; if(connectedCount()>0){ lastUp=Date.now(); return true; } return Date.now()-lastUp<12000; },
-        leave(){ if(closed) return Promise.resolve(); const bye=JSON.stringify({bye:1}); for(const c of clients){ try{ if(c.connected) c.publish(base+myId, bye); }catch(e){} }
-          closed=true; clearInterval(tick); setTimeout(()=>{ for(const c of clients) try{ c.end(true); }catch(e){} }, 300); others.clear(); rebuild(); return Promise.resolve(); }
+        connected(){ if(closed) return false; const up = create ? clients.some(live) : live(clients.find(x=>x._i===chosen)); if(up){ lastUp=Date.now(); return true; } return Date.now()-lastUp<15000; },
+        leave(){ if(closed) return Promise.resolve(); const bye=JSON.stringify({bye:1, s:++seq, h:create?1:0}); for(const c of clients){ try{ if(live(c)) c.publish(base+myId, bye); }catch(e){} }
+          closed=true; clearInterval(tick); setTimeout(()=>{ for(const c of clients) try{ c.end(true); }catch(e){} }, 400); others.clear(); rebuild(); return Promise.resolve(); }
       };
-      const tick=setInterval(()=>{ const now=Date.now(); let ch=false; for(const [id,o] of others) if(now-o.seen>7000){ others.delete(id); ch=true; } if(ch) rebuild(); if(now-lastOut>1000) flush(true); }, 500);
+      const tick=setInterval(()=>{ const now=Date.now(); let ch=false; for(const [id,o] of others) if(now-o.seen>8000){ others.delete(id); seenOn.delete(id); ch=true; } if(ch) rebuild(); if(now-lastOut>1000) flush(true); }, 500);
       const fail=code=>{ if(done) return; done=true; closed=true; clearInterval(tick); for(const c of clients) try{ c.end(true); }catch(e){} reject({code}); };
-      setTimeout(()=>{ if(done) return; if(connectedCount()===0) fail('network'); else if(!create) fail('notfound'); }, create ? 15000 : 9000);
+      setTimeout(()=>{ if(done) return; if(!clients.some(live)) fail('network'); else if(!create) fail('notfound'); }, create ? 16000 : 12000);
     });
   }
 } : null;
