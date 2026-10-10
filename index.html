@@ -351,7 +351,7 @@ table.sb tr.me td{background:rgba(185,167,121,.12)}
   </div>
 </div>
 
-<script src="peerjs.min.js"></script>
+<script src="mqtt.min.js"></script>
 <script src="three.min.js"></script>
 <script>
 (() => {
@@ -389,7 +389,7 @@ const W = {
 const WL = Object.keys(W);
 const GREN = { he:{n:'قنبلة متفجرة', price:300, max:1, icon:'💣'}, fl:{n:'قنبلة عمى', price:200, max:2, icon:'⚡'}, sm:{n:'قنبلة دخان', price:300, max:1, icon:'💨'} };
 const ARMOR = { vest:{n:'درع', price:650, ar:100}, vesth:{n:'درع + خوذة', price:1000, ar:200} };
-const START_MONEY = 800, MAX_MONEY = 16000, WIN_MONEY = 3250, LOSE_MONEY = 1400;
+const START_MONEY = 16000, MAX_MONEY = 16000, WIN_MONEY = 3250, LOSE_MONEY = 1400;
 const FREEZE_T = 6, LIVE_T = 115, END_T = 5, BUY_EXTRA = 15;
 
 /* =================== THREE =================== */
@@ -479,7 +479,7 @@ const TX = {
   cabinceil:()=>tex(128,128,(g,w,h)=>{ g.fillStyle='#d8d6d0'; g.fillRect(0,0,w,h); g.fillStyle='#bdbab2'; g.fillRect(0,50,w,28); g.fillStyle='#fffbe8'; g.fillRect(10,58,w-20,10); },'cabinceil'),
   earthfloor:()=>tex(256,256,(g,w,h)=>{ g.fillStyle='#9a7a52'; g.fillRect(0,0,w,h); speckle(g,w,h,2000,['#8a6a45','#b0905f','#7c5e3c'],4); cracks(g,w,h,4,'rgba(70,50,30,.5)'); },'earthfloor'),
   tent:()=>tex(128,128,(g,w,h)=>{ for(let x=0;x<w;x+=16){ g.fillStyle=(x/16)%2?'#e7dcc4':'#8a3a2e'; g.fillRect(x,0,16,h); } speckle(g,w,h,300,['#5a4a3a'],3,.3); },'tent'),
-  stripes:()=>tex(64,64,(g,w,h)=>{ for(let y=0;y<h;y+=16){ g.fillStyle='#1b1b1e'; g.fillRect(0,y,w,8); g.fillStyle='#e8e4da'; g.fillRect(0,y+8,w,8); } },'stripes')
+  stripes:()=>tex(64,64,(g,w,h)=>{ for(let y=0;y<h;y+=16){ g.fillStyle='#141416'; g.fillRect(0,y,w,7); g.fillStyle='#f06a1c'; g.fillRect(0,y+7,w,9); } },'stripes2')
 };
 
 /* =================== MAP / LEVEL =================== */
@@ -849,8 +849,8 @@ function makeModel(a){
   const g=new THREE.Group(); g.rotation.order='YXZ';
   const CH=CHARS[a.ch]||CHARS.std, skinC=CH.skin, hairC=CH.hair||'#2b2622', pol=a.team===0;
   const skin=new THREE.MeshPhongMaterial({color:skinC, shininess:8, specular:'#2a1a10'}), hair=new THREE.MeshLambertMaterial({color:hairC});
-  const shirt = pol ? mat('polShirt',()=>new THREE.MeshLambertMaterial({color:'#2a3d68'})) : mat('thfShirt',()=>new THREE.MeshLambertMaterial({map:TX.stripes()}));
-  const pants = pol ? mat('polPants',()=>new THREE.MeshLambertMaterial({color:'#1b2238'})) : mat('thfPants',()=>new THREE.MeshLambertMaterial({color:'#2d2f36'}));
+  const shirt = pol ? mat('polShirt2',()=>new THREE.MeshLambertMaterial({color:'#2a6fe0'})) : mat('thfShirt2',()=>new THREE.MeshLambertMaterial({map:TX.stripes()}));
+  const pants = pol ? mat('polPants2',()=>new THREE.MeshLambertMaterial({color:'#132a66'})) : mat('thfPants2',()=>new THREE.MeshLambertMaterial({color:'#e2581a'}));
   const shoe = mat('shoe',()=>phong('#141416',30,'#444')), dark=mat('darkCloth',()=>new THREE.MeshLambertMaterial({color:'#24272c'}));
   const hip=new THREE.Group(); hip.position.y=.92; g.add(hip);
   const mesh=(gm,m,x=0,y=0,z=0,p=hip)=>{ const o=new THREE.Mesh(gm,m); o.position.set(x,y,z); p.add(o); return o; };
@@ -864,7 +864,7 @@ function makeModel(a){
   const body=new THREE.Group(); hip.add(body);
   mesh(geo('pelvis',()=>{ const gg=latheGeo([[0,-.06],[.13,-.06],[.155,.02],[.15,.1],[0,.1]]); gg.scale(1,1,.7); return gg; }),pants,0,0,0,body);
   mesh(geo('torso',()=>{ const gg=latheGeo([[0,.06],[.14,.06],[.15,.14],[.145,.24],[.17,.36],[.19,.45],[.17,.51],[.09,.55],[0,.55]]); gg.scale(1,1,.62); return gg; }),shirt,0,0,0,body);
-  if(pol){ mesh(geo('vest',()=>{ const gg=latheGeo([[0,.18],[.158,.18],[.16,.26],[.18,.38],[.19,.46],[0,.46]]); gg.scale(1.04,1,.72); return gg; }),dark,0,0,0,body);
+  if(pol){ mesh(geo('vest',()=>{ const gg=latheGeo([[0,.18],[.158,.18],[.16,.26],[.18,.38],[.19,.46],[0,.46]]); gg.scale(1.04,1,.72); return gg; }),mat('polVest',()=>new THREE.MeshLambertMaterial({color:'#0e2a6b'})),0,0,0,body);
     mesh(geo('badge',()=>new THREE.CircleGeometry(.025,6)),mat('gold',()=>phong('#e3c34b',90,'#fff3b0')),-.08,.42,-.14,body).rotation.y=P;
     const tag=mesh(geo('ptag',()=>new THREE.PlaneGeometry(.14,.04)),mat('white',()=>new THREE.MeshLambertMaterial({color:'#eeeeee'})),.07,.33,-.141,body); tag.rotation.y=P; }
   else { mesh(geo('bag',()=>{ const gg=capsuleGeo(.12,.14); gg.scale(1.1,1,.55); return gg; }),mat('bagM',()=>new THREE.MeshLambertMaterial({color:'#6b5435'})),0,.32,.13,body); }
@@ -890,7 +890,7 @@ function makeModel(a){
   const ch=a.ch||'std';
   const cap=(gm,m,y=0,x=0,z=0)=>mesh(gm,m,x,y,z,headG);
   if(ch==='std'){
-    if(pol){ mesh(geo('capTop',()=>new THREE.CylinderGeometry(.122,.118,.075,18)),mat('cap',()=>new THREE.MeshLambertMaterial({color:'#1d2a4a'})),0,.1,0,headG);
+    if(pol){ mesh(geo('capTop',()=>new THREE.CylinderGeometry(.122,.118,.075,18)),mat('cap2',()=>new THREE.MeshLambertMaterial({color:'#1a47a8'})),0,.1,0,headG);
       const vis=mesh(geo('visor',()=>{ const gg=new THREE.CylinderGeometry(.11,.11,.012,16,1,false,0,P); return gg; }),mat('visorM',()=>phong('#0e0e10',60,'#555')),0,.07,-.04,headG); vis.rotation.y=P/2; vis.scale.z=.9;
       mesh(geo('capBadge',()=>new THREE.CircleGeometry(.018,6)),GM.brass(),0,.11,-.122,headG).rotation.y=P; }
     else { mesh(geo('beanie',()=>new THREE.SphereGeometry(.12,16,10,0,P*2,0,P*.5)),mat('beanieM',()=>new THREE.MeshLambertMaterial({color:'#18181b'})),0,.02,0,headG);
@@ -981,7 +981,7 @@ const VMP={ // gun offset in view, right hand (grip) and left hand positions in 
   knife:{base:[.11,-.12,-.26], r:[0,-.0,.04], l:[-.1,-.1,.05], lr:[.4,-.4,0]}
 };
 function setVMGun(wid, team){
-  vmSleeveM.color.set(team===0?'#2a3d68':'#2d2f36'); { const CH=CHARS[(ME&&ME.ch)||'std']||CHARS.std; if(CH.glove){ vmHandM.color.set('#232427'); vmHandM.shininess=25; } else { vmHandM.color.set(CH.skin); vmHandM.shininess=12; } }
+  vmSleeveM.color.set(team===0?'#2a6fe0':'#e2581a'); { const CH=CHARS[(ME&&ME.ch)||'std']||CHARS.std; if(CH.glove){ vmHandM.color.set('#232427'); vmHandM.shininess=25; } else { vmHandM.color.set(CH.skin); vmHandM.shininess=12; } }
   if(vmGunId===wid) return; if(vmGun) vm.remove(vmGun); vmGun=gunMesh(wid); if(wid==='knife'){ vmGun.rotation.set(.5,.35,-.4); vmGun.scale.setScalar(1.3); } vm.add(vmGun); vmGunId=wid;
   const t=vmGun.userData.tip, c=VMP[wid]; vmFlash.position.set(t[0],t[1],t[2]-.02);
   vmR.position.set(...c.r); vmR.rotation.set(.35,0,.05); vmL.position.set(...c.l); vmL.rotation.set(c.lr[0],c.lr[1],c.lr[2]-.3);
@@ -1050,7 +1050,7 @@ function spawnActor(a){
   a.m.g.visible = a!==ME; a.m.g.rotation.set(0,a.yaw,0); a.net=null;
 }
 function onRoundStart(a, first){
-  if(first){ a.money=M.respawn?3000:START_MONEY; resetLoadout(a); a.kills=0; a.deaths=0; }
+  if(first){ a.money=START_MONEY; resetLoadout(a); a.kills=0; a.deaths=0; }
   else { a.money=Math.min(MAX_MONEY, a.money + (M.lw===a.team?WIN_MONEY:LOSE_MONEY)); if(a.diedLastRound) resetLoadout(a); else refillAmmo(a); }
   a.diedLastRound=false; spawnActor(a);
   if(a===ME){ ME.scoped=false; reloadT=0; $('cmsg').hidden=true; updateHUD(); setVMGun(curW(ME),ME.team); if(!first) toast(`+$${M.lw===ME.team?WIN_MONEY:LOSE_MONEY}`); }
@@ -1524,48 +1524,43 @@ function hostCheckWin(){
   else if(M.type==='ctf'){ if(M.score[0]>=M.ct||M.score[1]>=M.ct||M.t<=0){ M.phase='over'; showEnd(); } }
   else if(M.type==='dom'){ if(OBJ.domHold>=DOM_HOLD || M.t<=0){ M.phase='over'; showEnd(); } }
 }
-/* =================== INTERNET ROOMS (PeerJS) — works from the downloaded file / app =================== */
-const PEER_ICE = { iceServers:[ {urls:'stun:stun.l.google.com:19302'}, {urls:'stun:stun1.l.google.com:19302'}, {urls:'stun:global.stun.twilio.com:3478'},
-  {urls:['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turn:openrelay.metered.ca:443?transport=tcp'], username:'openrelayproject', credential:'openrelayproject'} ] };
-const PEER_API = (typeof window!=='undefined' && window.Peer) ? {
+/* =================== INTERNET ROOMS (MQTT relay) — works from the downloaded file / app, no link needed =================== */
+const MQTT_BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081/mqtt'];
+const PEER_API = (typeof window!=='undefined' && window.mqtt) ? {
   isPeer:true,
   join(name, create){
-    const cfg = Object.assign({debug:0, config:PEER_ICE}, window.__peerCfg||{});
-    const hubId = 'kontrarab-' + String(name).replace(/[^a-zA-Z0-9]/g,'') ;
+    const urls = (window.__mqttBrokers || MQTT_BROKERS);
+    const base = 'kontrarab/v2/' + String(name).replace(/[^a-zA-Z0-9]/g,'') + '/';
+    const myId = 'p' + Math.random().toString(36).slice(2,10);
     return new Promise((resolve,reject)=>{
-      let done=false; const fail=(code)=>{ if(done) return; done=true; try{ peer.destroy(); }catch(e){} reject({code}); };
-      const peer = create ? new Peer(hubId, cfg) : new Peer(cfg);
-      const me = { peer:null, sameTab:true, isMe:true, presence:{} };
-      const others = new Map(); let snap=[]; const conns=new Map(); let hubConn=null, dirty=true, closed=false, lastSend=0, lastRecv=Date.now();
+      let done=false, closed=false, seq=0, lastOut=0, pending=null, sendT=null, anyUp=0, lastUp=Date.now();
+      const me = { peer:myId, sameTab:true, isMe:true, presence:{} };
+      const others = new Map(); let snap=[me];
       const rebuild=()=>{ snap=[me, ...others.values()]; };
+      const clients = urls.map(u=>{ let c=null; try{ c = mqtt.connect(u, { clientId:'ka_'+myId+'_'+Math.random().toString(36).slice(2,6), keepalive:20, reconnectPeriod:2500, connectTimeout:9000, clean:true }); }catch(e){ return null; }
+        c.on('connect', ()=>{ anyUp++; lastUp=Date.now(); c.subscribe(base+'+', {qos:0}); if(!done && create){ done=true; resolve(room); } flush(true); });
+        c.on('close', ()=>{ });
+        c.on('error', ()=>{});
+        c.on('message', (topic, buf)=>{ const id=topic.slice(base.length); if(id===myId) return; let m; try{ m=JSON.parse(new TextDecoder().decode(buf)); }catch(e){ return; }
+          if(!m || typeof m!=='object') return; if(m.bye){ others.delete(id); rebuild(); return; }
+          const o=others.get(id); if(o && m.s<=o.s) { o.seen=Date.now(); return; }
+          if(m.p && typeof m.p==='object'){ others.set(id,{peer:id, sameTab:false, isMe:false, presence:m.p, s:m.s, seen:Date.now()}); rebuild();
+            if(!done && !create && m.p.n){ done=true; resolve(room); } } });
+        return c; }).filter(Boolean);
+      const connectedCount = ()=>clients.filter(c=>c.connected).length;
+      function flush(force){ if(closed) return; const now=Date.now(); if(!force && now-lastOut<95){ if(!sendT) sendT=setTimeout(()=>{ sendT=null; flush(true); }, 95-(now-lastOut)); return; }
+        lastOut=now; const msg=JSON.stringify({p:me.presence, s:++seq}); for(const c of clients) if(c.connected) try{ c.publish(base+myId, msg, {qos:0}); }catch(e){} }
       const room = {
-        name, isHub:!!create,
-        presence(patch){ const p={...me.presence}; for(const k in patch){ if(patch[k]===null) delete p[k]; else p[k]=patch[k]; } me.presence=p; rebuild(); dirty=true;
-          if(!create && hubConn && hubConn.open){ try{ hubConn.send({t:'p', p}); }catch(e){} } return Promise.resolve(); },
+        name, isHub:false,
+        presence(patch){ const p={...me.presence}; for(const k in patch){ if(patch[k]===null) delete p[k]; else p[k]=patch[k]; } me.presence=p; rebuild(); flush(false); return Promise.resolve(); },
         peers(){ return snap; },
-        connected(){ return !closed && (create || (!!(hubConn && hubConn.open) && Date.now()-lastRecv<8000)); },
-        leave(){ closed=true; clearInterval(tick); try{ if(hubConn) hubConn.close(); }catch(e){} for(const c of conns.values()){ try{ c.close(); }catch(e){} } try{ peer.destroy(); }catch(e){} others.clear(); rebuild(); return Promise.resolve(); }
+        connected(){ if(closed) return false; if(connectedCount()>0){ lastUp=Date.now(); return true; } return Date.now()-lastUp<12000; },
+        leave(){ if(closed) return Promise.resolve(); const bye=JSON.stringify({bye:1}); for(const c of clients){ try{ if(c.connected) c.publish(base+myId, bye); }catch(e){} }
+          closed=true; clearInterval(tick); setTimeout(()=>{ for(const c of clients) try{ c.end(true); }catch(e){} }, 300); others.clear(); rebuild(); return Promise.resolve(); }
       };
-      const tick = setInterval(()=>{ const now=Date.now();
-        if(create){ for(const [id,o] of others){ if(now-o.seen>8000){ others.delete(id); const c=conns.get(id); if(c) try{ c.close(); }catch(e){} conns.delete(id); dirty=true; } } rebuild();
-          if((dirty || now-lastSend>900) && conns.size){ dirty=false; lastSend=now; const ps=[[me.peer, me.presence], ...[...others.values()].map(o=>[o.peer,o.presence])]; for(const c of conns.values()){ if(c.open) try{ c.send({t:'all', ps}); }catch(e){} } } }
-        else if(hubConn && hubConn.open && now-(room._lastPing||0)>2000){ room._lastPing=now; try{ hubConn.send({t:'p', p:me.presence}); }catch(e){} }
-      }, 60);
-      peer.on('error', e=>{ const t=e&&e.type;
-        if(!done){ if(t==='unavailable-id') return fail('taken'); if(t==='peer-unavailable') return fail('notfound'); if(t==='network'||t==='server-error'||t==='socket-error'||t==='socket-closed'||t==='browser-incompatible'||t==='webrtc') return fail('network'); return fail(t||'error'); }
-        if(t==='peer-unavailable' && !create){ closed=true; others.clear(); rebuild(); } });
-      peer.on('disconnected', ()=>{ if(!closed){ try{ peer.reconnect(); }catch(e){} } });
-      peer.on('open', id=>{ me.peer=id; rebuild();
-        if(create){ done=true; resolve(room); return; }
-        hubConn = peer.connect(hubId, {serialization:'json', reliable:true});
-        hubConn.on('open', ()=>{ if(done) return; done=true; lastRecv=Date.now(); try{ hubConn.send({t:'p', p:me.presence}); }catch(e){} resolve(room); });
-        hubConn.on('data', m=>{ if(!m||m.t!=='all'||!Array.isArray(m.ps)) return; lastRecv=Date.now(); others.clear(); for(const [id,p] of m.ps){ if(id!==me.peer && p) others.set(id,{peer:id, sameTab:false, isMe:false, presence:p, seen:Date.now()}); } rebuild(); });
-        hubConn.on('close', ()=>{ closed=true; others.clear(); rebuild(); });
-      });
-      if(create) peer.on('connection', c=>{ c.on('open', ()=>{ conns.set(c.peer,c); dirty=true; });
-        c.on('data', m=>{ if(!m||m.t!=='p'||typeof m.p!=='object') return; const raw=JSON.stringify(m.p); if(raw.length>12000) return; others.set(c.peer,{peer:c.peer, sameTab:false, isMe:false, presence:m.p, seen:Date.now()}); rebuild(); dirty=true; });
-        c.on('close', ()=>{ conns.delete(c.peer); others.delete(c.peer); rebuild(); dirty=true; }); });
-      setTimeout(()=>fail('timeout'), 25000);
+      const tick=setInterval(()=>{ const now=Date.now(); let ch=false; for(const [id,o] of others) if(now-o.seen>7000){ others.delete(id); ch=true; } if(ch) rebuild(); if(now-lastOut>1000) flush(true); }, 500);
+      const fail=code=>{ if(done) return; done=true; closed=true; clearInterval(tick); for(const c of clients) try{ c.end(true); }catch(e){} reject({code}); };
+      setTimeout(()=>{ if(done) return; if(connectedCount()===0) fail('network'); else if(!create) fail('notfound'); }, create ? 15000 : 9000);
     });
   }
 } : null;
@@ -1720,7 +1715,7 @@ function startGame(team){
   if(M.mode==='online' && !NET.peer){ const mp=peersNow().find(p=>p.sameTab); if(mp) NET.peer=mp.peer; }
   ME=makeActor(M.mode==='online'?'p'+(NET.peer||Math.random().toString(36).slice(2,8)):'me', nick(), team, 'me', myCountry, myChar); ME.m.g.visible=false; ME.money=START_MONEY;
   setVMGun('pistol',team);
-  for(const s of ['home','offline','online','lobby','endm']) $(s).hidden=true;
+  for(const s of ['gate','home','offline','online','lobby','endm']) $(s).hidden=true;
   $('hud').hidden=false; if(isTouch){ $('touch').hidden=false; try{ document.documentElement.requestFullscreen?.().catch(()=>{}); }catch(e){} } else lockPointer();
   $('feed').innerHTML=''; $('chatlog').innerHTML='';
 }
